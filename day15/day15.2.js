@@ -15,12 +15,28 @@ fs.readFile(path.join(__dirname, 'day15.input'), 'utf8', (err, data) => {
     let bot = { x: -1, y: -1 };
 
     rawBoard.split("\n").forEach((line, index) => {
-        board.push(line.split(''));
-        if (line.indexOf('@') > -1) {
-            bot.x = index;
-            bot.y = line.indexOf('@');
-            board[bot.x][bot.y] = '.';
-        }
+        const tiles = line.split('');
+        const row = [];
+        tiles.forEach((tile, tileIndex) => {
+            switch (tile) {
+                case '#':
+                    row.push('#', '#');
+                    break;
+                case 'O':
+                    row.push('[', ']');
+                    break;
+                case '.':
+                    row.push('.', '.');
+                    break;
+                case '@':
+                    row.push('.', '.');
+                    bot.x = index;
+                    bot.y = tileIndex * 2;
+                    break;
+            }
+        });
+
+        board.push(row);
     });
 
     const X = board.length;
@@ -35,7 +51,7 @@ fs.readFile(path.join(__dirname, 'day15.input'), 'utf8', (err, data) => {
     let sum = 0;
     for (let i = 0; i < X; i++) {
         for (let j = 0; j < Y; j++) {
-            if (board[i][j] === 'O') {
+            if (board[i][j] === '[') {
                 sum += 100 * i + j;
             }
         }
@@ -59,41 +75,124 @@ function processStep(board, bot, step) {
             return { board: board, bot: newBotPos };
         case '#':
             return { board: board, bot: bot };
-        case 'O':
+        case '[':
             if (canPush(board, newBotPos, step)) {
+                const newBoard = push(board, newBotPos, step);
+                if (step === '^' || step === 'v') {
+                    newBoard[newBotPos.x][newBotPos.y + 1] = '.';
+                }
+
                 return {
-                    board: push(board, newBotPos, step),
+                    board: newBoard,
                     bot: newBotPos,
                 }
             }
+            break;
+        case ']':
+            if (canPush(board, newBotPos, step)) {
+                const newBoard = push(board, newBotPos, step);
+                if (step === '^' || step === 'v') {
+                    newBoard[newBotPos.x][newBotPos.y - 1] = '.';
+                }
+
+                return {
+                    board: newBoard,
+                    bot: newBotPos,
+                }
+            }
+            break;
     }
 
     return { board: board, bot: bot };
 }
 
 function push(board, pos, dir) {
-    const end = { ...pos };
-    while (board[end.x][end.y] !== '.') {
-        end.x = end.x + directions[`${dir}`][0];
-        end.y = end.y + directions[`${dir}`][1];
-    }
+    if (dir === '<' || dir === '>') {
+        const end = { ...pos };
+        while (board[end.x][end.y] !== '.') {
+            end.x = end.x + directions[`${dir}`][0];
+            end.y = end.y + directions[`${dir}`][1];
+        }
 
-    board[end.x][end.y] = 'O';
-    board[pos.x][pos.y] = '.';
+        while (end.y !== pos.y) {
+            board[pos.x][end.y] = board[pos.x][end.y - directions[`${dir}`][1]];
+            end.y -= directions[`${dir}`][1];
+        }
+
+        board[pos.x][pos.y] = '.';
+    } else {
+        if (board[pos.x][pos.y] === '.') {
+            board[pos.x][pos.y] = board[pos.x - directions[`${dir}`][0]][pos.y];
+        } else if (board[pos.x][pos.y] === '[') {
+            push(board, {x: pos.x + directions[`${dir}`][0], y: pos.y}, dir);
+            if (board[pos.x - directions[`${dir}`][0]][pos.y] !== '[') {
+                push(board, {x: pos.x + directions[`${dir}`][0], y: pos.y + 1}, dir);
+                board[pos.x][pos.y + 1] = '.'; //board[pos.x - directions[`${dir}`][0]][pos.y + 1];
+            }
+
+            board[pos.x][pos.y] = board[pos.x - directions[`${dir}`][0]][pos.y];
+
+        } else if (board[pos.x][pos.y] === ']') {
+            push(board, {x: pos.x + directions[`${dir}`][0], y: pos.y}, dir);
+
+            if (board[pos.x - directions[`${dir}`][0]][pos.y] !== ']') {
+                push(board, {x: pos.x + directions[`${dir}`][0], y: pos.y - 1}, dir);
+                board[pos.x][pos.y - 1] = '.'; //board[pos.x - directions[`${dir}`][0]][pos.y - 1];
+            }
+
+            board[pos.x][pos.y] = board[pos.x - directions[`${dir}`][0]][pos.y];
+        }
+    }
 
     return board;
 }
 
 function canPush(board, pos, dir) {
-    if (board[pos.x][pos.y] === 'O') {
-        return canPush(
-            board,
-            {
-                x: pos.x + directions[`${dir}`][0],
-                y: pos.y + directions[`${dir}`][1],
-            },
-            dir,
-        );
+    if (dir === '<' || dir === '>') {
+        if (board[pos.x][pos.y] === '[' || board[pos.x][pos.y] === ']') {
+            return canPush(
+                board,
+                {
+                    x: pos.x + directions[`${dir}`][0],
+                    y: pos.y + directions[`${dir}`][1],
+                },
+                dir,
+            );
+        }
+    } else {
+        if (board[pos.x][pos.y] === '[') {
+            return canPush(
+                board,
+                {
+                    x: pos.x + directions[`${dir}`][0],
+                    y: pos.y + directions[`${dir}`][1],
+                },
+                dir,
+            ) && canPush(
+                board,
+                {
+                    x: pos.x + directions[`${dir}`][0],
+                    y: pos.y + 1 + directions[`${dir}`][1],
+                },
+                dir,
+            );
+        } else if (board[pos.x][pos.y] === ']') {
+            return canPush(
+                board,
+                {
+                    x: pos.x + directions[`${dir}`][0],
+                    y: pos.y + directions[`${dir}`][1],
+                },
+                dir,
+            ) && canPush(
+                board,
+                {
+                    x: pos.x + directions[`${dir}`][0],
+                    y: pos.y - 1 + directions[`${dir}`][1],
+                },
+                dir,
+            );
+        }
     }
 
     if (board[pos.x][pos.y] === '.') {
@@ -115,7 +214,6 @@ function printBoard(map, bot) {
         toPrint.push(line);
     }
     console.log(toPrint.join('\n'));
-    console.log("\n");
 }
 
 String.prototype.replaceAt = function(index, replacement) {
